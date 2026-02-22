@@ -37,6 +37,8 @@ This app sits in your system tray and shows you at a glance: How many percent an
 
 No configuration. No cookie headers. Just login and forget it's running.
 
+I am currently looking for other possible ways to build this app & I am considering rewriting it with a different approach. 
+
 ## Setup
 
 ### Requirements
