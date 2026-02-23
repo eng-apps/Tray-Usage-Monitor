@@ -2,27 +2,18 @@ namespace ClaudeUsageMonitor;
 
 internal static class Program
 {
-    private const string MutexName = "ClaudeUsageMonitor_v2";
-
     [STAThread]
     static void Main()
     {
-        using var mutex = new Mutex(true, MutexName, out bool isNew);
-        if (!isNew)
-        {
-            MessageBox.Show("Claude Usage Monitor läuft bereits.",
-                "Bereits aktiv", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
+        using var mutex = new Mutex(true, "ClaudeUsageMonitor_v3", out bool isNew);
+        if (!isNew) { MessageBox.Show("Läuft bereits.", "Claude Usage Monitor"); return; }
 
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
 
-        Application.ThreadException += (_, e) =>
-            System.Diagnostics.Debug.WriteLine($"UI Exception: {e.Exception}");
-        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            System.Diagnostics.Debug.WriteLine($"Unhandled: {e.ExceptionObject}");
+        Application.ThreadException += (_, e) => System.Diagnostics.Debug.WriteLine($"UI: {e.Exception}");
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => System.Diagnostics.Debug.WriteLine($"Fatal: {e.ExceptionObject}");
 
         Application.Run(new MainForm());
     }

@@ -1,95 +1,64 @@
 namespace ClaudeUsageMonitor;
 
 /// <summary>
-/// Datenmodell für die claude.ai Usage-API Response.
+/// Datenmodell für GET https://api.anthropic.com/api/oauth/usage
 /// 
-/// Die API GET /api/organizations/{orgId}/usage liefert JSON:
+/// Response:
 /// {
-///   "five_hour": { "utilization": 42.5, "resets_at": "2025-02-17T18:00:00Z" },
-///   "seven_day": { "utilization": 13.0, "resets_at": "2025-02-19T07:00:00Z" }
+///   "five_hour":  { "utilization": 42.5, "resets_at": "2025-02-17T18:00:00Z" },
+///   "seven_day":  { "utilization": 13.0, "resets_at": "2025-02-19T07:00:00Z" },
+///   "extra_usage": { "is_enabled": true, "monthly_limit": 5000, "used_credits": 1250, "utilization": 25.0 }
 /// }
 /// </summary>
 public sealed class UsageData
 {
-    // --- Session (5-Stunden-Fenster) ---
     public double SessionPercent { get; set; }
     public DateTime? SessionResetsAt { get; set; }
 
-    // --- Weekly (7-Tage-Fenster) ---
     public double WeeklyPercent { get; set; }
     public DateTime? WeeklyResetsAt { get; set; }
-    public bool HasWeeklyLimit { get; set; }
+    public bool HasWeekly { get; set; }
 
-    // --- Meta ---
+    // Extra Usage (Pay-as-you-go Overage)
+    public bool ExtraEnabled { get; set; }
+    public double ExtraPercent { get; set; }
+    public decimal ExtraUsedDollars { get; set; }
+    public decimal ExtraLimitDollars { get; set; }
+
     public DateTime FetchedAt { get; set; } = DateTime.Now;
-    public string? RawJson { get; set; }
 
     // --- Berechnete Properties ---
 
-    public TimeSpan SessionResetIn =>
-        SessionResetsAt.HasValue
-            ? (SessionResetsAt.Value.ToLocalTime() - DateTime.Now) is var d && d > TimeSpan.Zero ? d : TimeSpan.Zero
-            : TimeSpan.Zero;
+    public TimeSpan SessionResetIn => TimeUntil(SessionResetsAt);
+    public TimeSpan WeeklyResetIn => TimeUntil(WeeklyResetsAt);
 
-    public TimeSpan WeeklyResetIn =>
-        WeeklyResetsAt.HasValue
-            ? (WeeklyResetsAt.Value.ToLocalTime() - DateTime.Now) is var d && d > TimeSpan.Zero ? d : TimeSpan.Zero
-            : TimeSpan.Zero;
+    public string SessionResetText => FormatSpan(SessionResetIn);
+    public string WeeklyResetText => FormatSpan(WeeklyResetIn);
 
-    public string SessionResetFormatted => FormatTimeSpan(SessionResetIn);
-    public string WeeklyResetFormatted => FormatTimeSpan(WeeklyResetIn);
-
-    /// <summary>Tooltip-Text für NotifyIcon (max 127 Zeichen).</summary>
     public string TooltipText
     {
         get
         {
-            var lines = new List<string>
-            {
-                "Claude Usage Monitor",
-                $"Session: {SessionPercent:0}% | Reset: {SessionResetFormatted}",
-            };
-            if (HasWeeklyLimit)
-                lines.Add($"Weekly: {WeeklyPercent:0}% | Reset: {WeeklyResetFormatted}");
-            lines.Add($"Updated: {FetchedAt:HH:mm:ss}");
-
-            var text = string.Join("\n", lines);
-            return text.Length > 127 ? text[..127] : text;
+            var s = $"Session: {SessionPercent:0}% | Reset: {SessionResetText}";
+            if (HasWeekly) s += $"\nWeekly: {WeeklyPercent:0}% | Reset: {WeeklyResetText}";
+            if (ExtraEnabled) s += $"\nExtra: ${ExtraUsedDollars:F2}/${ExtraLimitDollars:F2}";
+            s += $"\nUpdated: {FetchedAt:HH:mm:ss}";
+            return s.Length > 127 ? s[..127] : s;
         }
     }
 
-    /// <summary>Ausführlicher Detail-Text.</summary>
-    public string DetailText
+    private static TimeSpan TimeUntil(DateTime? utc)
     {
-        get
-        {
-            var lines = new List<string>
-            {
-                "Session (5h Window)",
-                $"  Usage: {SessionPercent:0.0}%",
-                $"  Reset in: {SessionResetFormatted}",
-                SessionResetsAt.HasValue ? $"  Reset at: {SessionResetsAt.Value.ToLocalTime():HH:mm:ss}" : "",
-            };
-            if (HasWeeklyLimit)
-            {
-                lines.Add("");
-                lines.Add("Weekly (7-Day Window)");
-                lines.Add($"  Usage: {WeeklyPercent:0.0}%");
-                lines.Add($"  Reset in: {WeeklyResetFormatted}");
-            }
-            lines.Add("");
-            lines.Add($"Last Update: {FetchedAt:HH:mm:ss}");
-            return string.Join(Environment.NewLine, lines.Where(l => l != ""));
-        }
+        if (!utc.HasValue) return TimeSpan.Zero;
+        var d = utc.Value.ToLocalTime() - DateTime.Now;
+        return d > TimeSpan.Zero ? d : TimeSpan.Zero;
     }
 
-    private static string FormatTimeSpan(TimeSpan ts)
+    private static string FormatSpan(TimeSpan ts)
     {
         if (ts <= TimeSpan.Zero) return "--:--";
-        if (ts.TotalDays >= 1)
-            return $"{(int)ts.TotalDays}d {ts.Hours}h";
-        if (ts.TotalHours >= 1)
-            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        if (ts.TotalDays >= 1) return $"{(int)ts.TotalDays}d {ts.Hours}h";
+        if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
         return $"{ts.Minutes}m";
     }
 }
