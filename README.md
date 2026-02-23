@@ -1,4 +1,4 @@
-# Claude Usage Monitor v3
+# Claude Usage Monitor v2
 
 Windows tray app that shows your Claude.ai usage at a glance.
 
@@ -7,8 +7,6 @@ Windows tray app that shows your Claude.ai usage at a glance.
 The app reads the OAuth token that **Claude Code** stores in your Windows Credential Manager, then calls the Anthropic OAuth usage API. One HTTP request. No browser, no cookies, no WebView2, no manual configuration.
 
 **Prerequisite:** You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in (`claude login`).
-
-I am currently looking for other possible ways to build this app & I am considering rewriting it with a different approach. 
 
 ## Setup
 
