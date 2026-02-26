@@ -1,7 +1,7 @@
 namespace ClaudeUsageMonitor;
 
 /// <summary>
-/// Datenmodell für GET https://api.anthropic.com/api/oauth/usage
+/// Data model for GET https://api.anthropic.com/api/oauth/usage
 /// 
 /// Response:
 /// {
@@ -27,7 +27,7 @@ public sealed class UsageData
 
     public DateTime FetchedAt { get; set; } = DateTime.Now;
 
-    // --- Berechnete Properties ---
+    // --- Computed Properties ---
 
     public TimeSpan SessionResetIn => TimeUntil(SessionResetsAt);
     public TimeSpan WeeklyResetIn => TimeUntil(WeeklyResetsAt);
@@ -35,12 +35,28 @@ public sealed class UsageData
     public string SessionResetText => FormatSpan(SessionResetIn);
     public string WeeklyResetText => FormatSpan(WeeklyResetIn);
 
+    // Pacing: linear expected usage based on elapsed time in the window
+    private static readonly TimeSpan SessionWindow = TimeSpan.FromHours(5);
+    private static readonly TimeSpan WeeklyWindow = TimeSpan.FromDays(7);
+
+    public double SessionExpectedPercent => ExpectedPercent(SessionResetsAt, SessionWindow);
+    public double WeeklyExpectedPercent => ExpectedPercent(WeeklyResetsAt, WeeklyWindow);
+
+    public double SessionPaceDiff => SessionPercent - SessionExpectedPercent;
+    public double WeeklyPaceDiff => WeeklyPercent - WeeklyExpectedPercent;
+
+    public string SessionPaceText => FormatPace(SessionPaceDiff);
+    public string WeeklyPaceText => FormatPace(WeeklyPaceDiff);
+
     public string TooltipText
     {
         get
         {
             var s = $"Session: {SessionPercent:0}% | Reset: {SessionResetText}";
-            if (HasWeekly) s += $"\nWeekly: {WeeklyPercent:0}% | Reset: {WeeklyResetText}";
+            if (HasWeekly)
+            {
+                s += $"\nWeekly: {WeeklyPercent:0}% ({WeeklyPaceText})";
+            }
             if (ExtraEnabled) s += $"\nExtra: ${ExtraUsedDollars:F2}/${ExtraLimitDollars:F2}";
             s += $"\nUpdated: {FetchedAt:HH:mm:ss}";
             return s.Length > 127 ? s[..127] : s;
@@ -60,5 +76,22 @@ public sealed class UsageData
         if (ts.TotalDays >= 1) return $"{(int)ts.TotalDays}d {ts.Hours}h";
         if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
         return $"{ts.Minutes}m";
+    }
+
+    private static double ExpectedPercent(DateTime? resetsAtUtc, TimeSpan window)
+    {
+        if (!resetsAtUtc.HasValue) return 0;
+        var windowStart = resetsAtUtc.Value.ToLocalTime() - window;
+        var elapsed = DateTime.Now - windowStart;
+        if (elapsed <= TimeSpan.Zero) return 0;
+        var pct = elapsed.TotalSeconds / window.TotalSeconds * 100;
+        return Math.Clamp(pct, 0, 100);
+    }
+
+    private static string FormatPace(double diff)
+    {
+        if (diff >= 5) return $"+{diff:0}% ahead";
+        if (diff <= -5) return $"{diff:0}% under";
+        return "on pace";
     }
 }
