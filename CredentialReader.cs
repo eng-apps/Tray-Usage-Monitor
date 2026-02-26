@@ -5,9 +5,9 @@ using System.Text.Json;
 namespace ClaudeUsageMonitor;
 
 /// <summary>
-/// Liest den OAuth Access Token von Claude Code.
-/// 
-/// Suchpfade (in Reihenfolge):
+/// Reads the OAuth Access Token from Claude Code.
+///
+/// Search paths (in order):
 ///   1. Windows Credential Manager: "Claude Code-credentials"
 ///   2. %USERPROFILE%\.claude\.credentials.json
 ///   3. %HOMEDRIVE%%HOMEPATH%\.claude\.credentials.json  (Fallback)
@@ -42,74 +42,74 @@ public static class CredentialReader
     }
 
     /// <summary>
-    /// Liest den OAuth Access Token.
+    /// Reads the OAuth Access Token.
     /// </summary>
     public static string? GetAccessToken()
     {
-        // --- Versuch 1: Credential Manager ---
+        // --- Attempt 1: Credential Manager ---
         try
         {
             var json = ReadFromCredentialManager();
             if (json != null)
             {
-                Log($"Token aus Credential Manager gelesen ({json.Length} Bytes)");
+                Log($"Token read from Credential Manager ({json.Length} bytes)");
                 var token = ExtractAccessToken(json);
                 if (token != null) return token;
-                Log("Credential Manager: JSON gefunden aber kein accessToken extrahierbar");
+                Log("Credential Manager: JSON found but could not extract accessToken");
             }
             else
             {
-                Log("Credential Manager: Kein Eintrag 'Claude Code-credentials' gefunden");
+                Log("Credential Manager: No entry 'Claude Code-credentials' found");
             }
         }
         catch (Exception ex)
         {
-            Log($"Credential Manager Fehler: {ex.Message}");
+            Log($"Credential Manager error: {ex.Message}");
         }
 
-        // --- Versuch 2: Datei (mehrere Pfade) ---
+        // --- Attempt 2: File (multiple paths) ---
         foreach (var path in GetCredentialFilePaths())
         {
             try
             {
                 if (!File.Exists(path))
                 {
-                    Log($"Datei nicht vorhanden: {path}");
+                    Log($"File not found: {path}");
                     continue;
                 }
 
                 var json = File.ReadAllText(path, Encoding.UTF8);
-                Log($"Datei gelesen: {path} ({json.Length} Bytes)");
+                Log($"File read: {path} ({json.Length} bytes)");
 
                 if (!json.Contains("claudeAiOauth"))
                 {
-                    Log($"Datei enthält kein 'claudeAiOauth': {path}");
+                    Log($"File does not contain 'claudeAiOauth': {path}");
                     continue;
                 }
 
                 var token = ExtractAccessToken(json);
                 if (token != null)
                 {
-                    Log($"Token aus Datei extrahiert: {path}");
+                    Log($"Token extracted from file: {path}");
                     return token;
                 }
 
-                Log($"Datei enthält claudeAiOauth aber kein accessToken: {path}");
+                Log($"File contains claudeAiOauth but no accessToken: {path}");
             }
             catch (Exception ex)
             {
-                Log($"Datei-Fehler ({path}): {ex.Message}");
+                Log($"File error ({path}): {ex.Message}");
             }
         }
 
-        Log("KEIN TOKEN GEFUNDEN in keiner Quelle");
+        Log("NO TOKEN FOUND in any source");
         return null;
     }
 
-    /// <summary>Alle möglichen Pfade für die Credentials-Datei.</summary>
+    /// <summary>All possible paths for the credentials file.</summary>
     private static IEnumerable<string> GetCredentialFilePaths()
     {
-        // Primär: %USERPROFILE%\.claude\.credentials.json
+        // Primary: %USERPROFILE%\.claude\.credentials.json
         var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
         if (!string.IsNullOrEmpty(userProfile))
             yield return Path.Combine(userProfile, DirName, FileName);
@@ -143,7 +143,7 @@ public static class CredentialReader
             var bytes = new byte[cred.CredentialBlobSize];
             Marshal.Copy(cred.CredentialBlob, bytes, 0, cred.CredentialBlobSize);
 
-            // UTF-8 versuchen (Standard)
+            // Try UTF-8 (default)
             var text = Encoding.UTF8.GetString(bytes);
             if (text.Contains("claudeAiOauth")) return text;
 
@@ -151,7 +151,7 @@ public static class CredentialReader
             text = Encoding.Unicode.GetString(bytes);
             if (text.Contains("claudeAiOauth")) return text;
 
-            Log($"Credential Manager: Blob gelesen ({cred.CredentialBlobSize} Bytes) aber kein claudeAiOauth drin");
+            Log($"Credential Manager: Blob read ({cred.CredentialBlobSize} bytes) but no claudeAiOauth found");
             return null;
         }
         finally
@@ -171,14 +171,14 @@ public static class CredentialReader
                 var val = token.GetString();
                 if (!string.IsNullOrWhiteSpace(val))
                 {
-                    Log($"accessToken extrahiert: {val[..Math.Min(20, val.Length)]}...");
+                    Log($"accessToken extracted: {val[..Math.Min(20, val.Length)]}...");
                     return val;
                 }
             }
         }
         catch (Exception ex)
         {
-            Log($"JSON-Parse-Fehler: {ex.Message}");
+            Log($"JSON parse error: {ex.Message}");
         }
         return null;
     }

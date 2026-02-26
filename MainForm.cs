@@ -4,7 +4,7 @@ using System.Drawing.Text;
 namespace ClaudeUsageMonitor;
 
 /// <summary>
-/// Tray-App. Liest OAuth-Token von Claude Code, fetcht Usage, zeigt Icon.
+/// Tray app. Reads OAuth token from Claude Code, fetches usage, displays icon.
 /// </summary>
 public sealed class MainForm : Form
 {
@@ -69,10 +69,10 @@ public sealed class MainForm : Form
                 var userProfile = Environment.GetEnvironmentVariable("USERPROFILE") ?? "?";
                 var credFile = Path.Combine(userProfile, ".claude", ".credentials.json");
                 var fileExists = File.Exists(credFile);
-                var diagMsg = $"Kein OAuth-Token gefunden.\n" +
-                              $"Datei: {credFile}\n" +
-                              $"Existiert: {fileExists}\n" +
-                              $"Bitte 'claude login' ausführen.";
+                var diagMsg = $"No OAuth token found.\n" +
+                              $"File: {credFile}\n" +
+                              $"Exists: {fileExists}\n" +
+                              $"Please run 'claude login'.";
 
                 SetIcon("!", CCrit, diagMsg);
                 if (!_tokenWarningShown)
@@ -94,16 +94,16 @@ public sealed class MainForm : Form
         }
         catch (UnauthorizedAccessException)
         {
-            SetIcon("AUTH", CCrit, "OAuth Token abgelaufen.\nclaude login ausführen.");
-            _trayIcon.ShowBalloonTip(8000, "Token abgelaufen",
-                "Bitte 'claude login' im Terminal ausführen.", ToolTipIcon.Warning);
+            SetIcon("AUTH", CCrit, "OAuth token expired.\nRun 'claude login'.");
+            _trayIcon.ShowBalloonTip(8000, "Token expired",
+                "Please run 'claude login' in the terminal.", ToolTipIcon.Warning);
         }
         catch (Exception ex)
         {
             _errors++;
-            SetIcon("ERR", CCrit, $"Fehler: {ex.Message}");
+            SetIcon("ERR", CCrit, $"Error: {ex.Message}");
             if (_errors >= 3)
-                _trayIcon.ShowBalloonTip(5000, "Fehler", ex.Message, ToolTipIcon.Error);
+                _trayIcon.ShowBalloonTip(5000, "Error", ex.Message, ToolTipIcon.Error);
         }
         finally
         {
@@ -119,17 +119,17 @@ public sealed class MainForm : Form
     {
         var m = new ContextMenuStrip();
 
-        var show = new ToolStripMenuItem("📊  Details") { Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+        var show = new ToolStripMenuItem("Details") { Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
         show.Click += (_, _) => ShowDetails();
         m.Items.Add(show);
 
         m.Items.Add(new ToolStripSeparator());
 
-        var refresh = new ToolStripMenuItem("🔄  Refresh");
+        var refresh = new ToolStripMenuItem("Refresh");
         refresh.Click += async (_, _) => await PollAsync();
         m.Items.Add(refresh);
 
-        var raw = new ToolStripMenuItem("📋  Raw JSON kopieren");
+        var raw = new ToolStripMenuItem("Copy Raw JSON");
         raw.Click += (_, _) =>
         {
             if (_lastData?.TooltipText != null)
@@ -142,7 +142,7 @@ public sealed class MainForm : Form
 
         m.Items.Add(new ToolStripSeparator());
 
-        var exit = new ToolStripMenuItem("❌  Exit");
+        var exit = new ToolStripMenuItem("Exit");
         exit.Click += (_, _) => { _trayIcon.Visible = false; Application.Exit(); };
         m.Items.Add(exit);
 
@@ -157,7 +157,7 @@ public sealed class MainForm : Form
     {
         if (_lastData == null)
         {
-            MessageBox.Show("Noch keine Daten.", "Claude Usage", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("No data yet.", "Claude Usage", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -177,8 +177,8 @@ public sealed class MainForm : Form
         };
 
         int y = 15;
-        AddBar(dlg, ref y, "Session (5h)", d.SessionPercent, $"Reset: {d.SessionResetText}");
-        if (d.HasWeekly) AddBar(dlg, ref y, "Weekly (7d)", d.WeeklyPercent, $"Reset: {d.WeeklyResetText}");
+        AddBar(dlg, ref y, "Session (5h)", d.SessionPercent, $"Reset: {d.SessionResetText} | {d.SessionPaceText}", d.SessionExpectedPercent);
+        if (d.HasWeekly) AddBar(dlg, ref y, "Weekly (7d)", d.WeeklyPercent, $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceText}", d.WeeklyExpectedPercent);
         if (d.ExtraEnabled) AddBar(dlg, ref y, "Extra Usage", d.ExtraPercent, $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}");
 
         dlg.Controls.Add(new Label
@@ -191,7 +191,7 @@ public sealed class MainForm : Form
         dlg.ShowDialog();
     }
 
-    private static void AddBar(Form f, ref int y, string label, double pct, string sub)
+    private static void AddBar(Form f, ref int y, string label, double pct, string sub, double expectedPct = -1)
     {
         var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
 
@@ -208,6 +208,14 @@ public sealed class MainForm : Form
         {
             var w = (int)(bar.Width * Math.Min(pct, 100) / 100);
             if (w > 0) { using var b = new SolidBrush(color); e.Graphics.FillRectangle(b, 0, 0, w, bar.Height); }
+
+            // Draw expected pace marker as a white vertical line
+            if (expectedPct >= 0)
+            {
+                var mx = (int)(bar.Width * Math.Min(expectedPct, 100) / 100);
+                using var pen = new Pen(Color.FromArgb(200, 255, 255, 255), 2);
+                e.Graphics.DrawLine(pen, mx, 0, mx, bar.Height);
+            }
         };
         f.Controls.Add(bar);
         y += 18;

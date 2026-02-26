@@ -4,16 +4,13 @@ using System.Text.Json;
 namespace ClaudeUsageMonitor;
 
 /// <summary>
-/// Fetcht Usage-Daten von der Anthropic OAuth API.
-/// 
-/// Ein einziger HTTP-Call:
+/// Fetches usage data from the Anthropic OAuth API.
+///
+/// A single HTTP call:
 ///   GET https://api.anthropic.com/api/oauth/usage
 ///   Authorization: Bearer {accessToken}
 ///   anthropic-beta: oauth-2025-04-20
 ///   User-Agent: claude-code/2.0.32
-/// 
-/// Das ist der gleiche Endpoint den das Bash-Gist von omachala nutzt.
-/// Keine Org-ID nötig, kein Cookie, kein Browser.
 /// </summary>
 public sealed class UsageFetcher : IDisposable
 {
@@ -29,7 +26,7 @@ public sealed class UsageFetcher : IDisposable
     }
 
     /// <summary>
-    /// Fetcht Usage-Daten mit dem gegebenen OAuth Access Token.
+    /// Fetches usage data with the given OAuth Access Token.
     /// </summary>
     public async Task<UsageData> FetchAsync(string accessToken, CancellationToken ct = default)
     {
@@ -41,7 +38,7 @@ public sealed class UsageFetcher : IDisposable
         var resp = await _http.SendAsync(req, ct);
 
         if (resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new UnauthorizedAccessException("OAuth Token abgelaufen oder ungültig. Bitte 'claude login' ausführen.");
+            throw new UnauthorizedAccessException("OAuth token expired or invalid. Please run 'claude login'.");
 
         resp.EnsureSuccessStatusCode();
 
@@ -60,7 +57,7 @@ public sealed class UsageFetcher : IDisposable
         // five_hour
         if (root.TryGetProperty("five_hour", out var fh))
         {
-            if (fh.TryGetProperty("utilization", out var u)) data.SessionPercent = u.GetDouble();
+            if (fh.TryGetProperty("utilization", out var u) && u.ValueKind == JsonValueKind.Number) data.SessionPercent = u.GetDouble();
             if (fh.TryGetProperty("resets_at", out var r) && r.ValueKind == JsonValueKind.String)
                 if (DateTime.TryParse(r.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
                     data.SessionResetsAt = dt.ToUniversalTime();
@@ -70,7 +67,7 @@ public sealed class UsageFetcher : IDisposable
         if (root.TryGetProperty("seven_day", out var sd))
         {
             data.HasWeekly = true;
-            if (sd.TryGetProperty("utilization", out var u)) data.WeeklyPercent = u.GetDouble();
+            if (sd.TryGetProperty("utilization", out var u) && u.ValueKind == JsonValueKind.Number) data.WeeklyPercent = u.GetDouble();
             if (sd.TryGetProperty("resets_at", out var r) && r.ValueKind == JsonValueKind.String)
                 if (DateTime.TryParse(r.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
                     data.WeeklyResetsAt = dt.ToUniversalTime();
@@ -79,11 +76,11 @@ public sealed class UsageFetcher : IDisposable
         // extra_usage (Pay-as-you-go)
         if (root.TryGetProperty("extra_usage", out var ex))
         {
-            if (ex.TryGetProperty("is_enabled", out var en)) data.ExtraEnabled = en.GetBoolean();
-            if (ex.TryGetProperty("utilization", out var u)) data.ExtraPercent = u.GetDouble();
-            // API liefert Cents → in Dollar umrechnen
-            if (ex.TryGetProperty("used_credits", out var uc)) data.ExtraUsedDollars = uc.GetDecimal() / 100m;
-            if (ex.TryGetProperty("monthly_limit", out var ml)) data.ExtraLimitDollars = ml.GetDecimal() / 100m;
+            if (ex.TryGetProperty("is_enabled", out var en) && en.ValueKind != JsonValueKind.Null) data.ExtraEnabled = en.GetBoolean();
+            if (ex.TryGetProperty("utilization", out var u) && u.ValueKind == JsonValueKind.Number) data.ExtraPercent = u.GetDouble();
+            // API returns cents, convert to dollars
+            if (ex.TryGetProperty("used_credits", out var uc) && uc.ValueKind == JsonValueKind.Number) data.ExtraUsedDollars = uc.GetDecimal() / 100m;
+            if (ex.TryGetProperty("monthly_limit", out var ml) && ml.ValueKind == JsonValueKind.Number) data.ExtraLimitDollars = ml.GetDecimal() / 100m;
         }
 
         return data;

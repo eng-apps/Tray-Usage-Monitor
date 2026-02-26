@@ -6,7 +6,7 @@ internal static class Program
     static void Main()
     {
         using var mutex = new Mutex(true, "ClaudeUsageMonitor_v3", out bool isNew);
-        if (!isNew) { MessageBox.Show("Läuft bereits.", "Claude Usage Monitor"); return; }
+        if (!isNew) { MessageBox.Show("Already running.", "Claude Usage Monitor"); return; }
 
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
