@@ -230,42 +230,33 @@ public sealed class MainForm : Form
         _widget.Controls.Clear();
 
         var d = _lastData;
-        var height = 160;
-        if (d.HasWeekly) height += 75;
-        if (d.ExtraEnabled) height += 60;
-        _widget.ClientSize = new Size(400, height - 20);
+        var updated = $" · {d.FetchedAt:HH:mm:ss}";
 
         int y = 15;
         // Session bar: colored session-pace marker + cyan weekly-reference marker (when available)
+        var sessionSub = $"Reset: {d.SessionResetText} | {d.SessionPaceText}";
         if (d.HasWeekly)
-            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent,
-                $"Reset: {d.SessionResetText} | {d.SessionPaceText}",
+            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, sessionSub,
                 (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)),
                 (d.WeeklyExpectedPercent, CWeekly));
         else
-            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent,
-                $"Reset: {d.SessionResetText} | {d.SessionPaceText}",
+            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, sessionSub + updated,
                 (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)));
 
-        // Weekly bar: colored marker + pace status in subtitle
+        // Weekly bar: colored marker + pace status + updated time in subtitle
         if (d.HasWeekly)
         {
             var paceStatus = d.WeeklyPaceDiff >= 5 ? "ahead" : d.WeeklyPaceDiff <= -5 ? "under" : "on pace";
             var weeklySub = $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceDiff:+0.0;-0.0;0.0}% {paceStatus}";
-            AddBar(_widget, ref y, "Weekly (7d)", d.WeeklyPercent,
-                weeklySub,
+            AddBar(_widget, ref y, "Weekly (7d)", d.WeeklyPercent, weeklySub + updated,
                 (d.WeeklyExpectedPercent, PaceColor(d.WeeklyPaceDiff)));
         }
 
         if (d.ExtraEnabled) AddBar(_widget, ref y, "Extra Usage", d.ExtraPercent,
-            $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}");
+            $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}" + updated);
 
-        _widget.Controls.Add(new Label
-        {
-            Text = $"Updated: {d.FetchedAt:HH:mm:ss}",
-            Location = new Point(20, y), Size = new Size(370, 18),
-            ForeColor = Color.FromArgb(100, 100, 110), Font = new Font("Segoe UI", 8f),
-        });
+        // Size the widget exactly to content with a small bottom margin
+        _widget.ClientSize = new Size(400, y + 8);
 
         _widget.ResumeLayout();
     }
