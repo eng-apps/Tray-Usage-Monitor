@@ -24,6 +24,11 @@ public sealed class MainForm : Form
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
     private static readonly Color CCrit = Color.FromArgb(239, 68, 68);
     private static readonly Color CGray = Color.FromArgb(156, 163, 175);
+    private static readonly Color CWeekly = Color.FromArgb(56, 189, 248); // cyan — weekly reference on session bar
+
+    // over-pace = red (burning quota fast), under-pace = green (headroom), on-pace = yellow
+    private static Color PaceColor(double diff) =>
+        diff >= 5 ? CCrit : diff <= -5 ? COk : CWarn;
 
     public MainForm()
     {
@@ -231,9 +236,28 @@ public sealed class MainForm : Form
         _widget.ClientSize = new Size(400, height - 40);
 
         int y = 15;
-        AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, $"Reset: {d.SessionResetText} | {d.SessionPaceText}", d.SessionExpectedPercent);
-        if (d.HasWeekly) AddBar(_widget, ref y, "Weekly (7d)", d.WeeklyPercent, $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceText}", d.WeeklyExpectedPercent);
-        if (d.ExtraEnabled) AddBar(_widget, ref y, "Extra Usage", d.ExtraPercent, $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}");
+        // Session bar: colored session-pace marker + cyan weekly-reference marker (when available)
+        if (d.HasWeekly)
+            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent,
+                $"Reset: {d.SessionResetText} | {d.SessionPaceText}",
+                (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)),
+                (d.WeeklyExpectedPercent, CWeekly));
+        else
+            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent,
+                $"Reset: {d.SessionResetText} | {d.SessionPaceText}",
+                (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)));
+
+        // Weekly bar: colored marker + pace-diff % in label
+        if (d.HasWeekly)
+        {
+            var weeklyLabel = $"Weekly (7d)  {d.WeeklyPaceDiff:+0.0;-0.0;0.0}%";
+            AddBar(_widget, ref y, weeklyLabel, d.WeeklyPercent,
+                $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceText}",
+                (d.WeeklyExpectedPercent, PaceColor(d.WeeklyPaceDiff)));
+        }
+
+        if (d.ExtraEnabled) AddBar(_widget, ref y, "Extra Usage", d.ExtraPercent,
+            $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}");
 
         _widget.Controls.Add(new Label
         {
@@ -245,7 +269,8 @@ public sealed class MainForm : Form
         _widget.ResumeLayout();
     }
 
-    private static void AddBar(Form f, ref int y, string label, double pct, string sub, double expectedPct = -1)
+    private static void AddBar(Form f, ref int y, string label, double pct, string sub,
+        params (double Pct, Color Clr)[] markers)
     {
         var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
 
@@ -263,11 +288,12 @@ public sealed class MainForm : Form
             var w = (int)(bar.Width * Math.Min(pct, 100) / 100);
             if (w > 0) { using var b = new SolidBrush(color); e.Graphics.FillRectangle(b, 0, 0, w, bar.Height); }
 
-            // Draw expected pace marker as a white vertical line
-            if (expectedPct >= 0)
+            // Draw each pace marker as a colored vertical line
+            foreach (var (mPct, mClr) in markers)
             {
-                var mx = (int)(bar.Width * Math.Min(expectedPct, 100) / 100);
-                using var pen = new Pen(Color.FromArgb(200, 255, 255, 255), 2);
+                if (mPct < 0) continue;
+                var mx = (int)(bar.Width * Math.Min(mPct, 100) / 100);
+                using var pen = new Pen(Color.FromArgb(210, mClr), 2);
                 e.Graphics.DrawLine(pen, mx, 0, mx, bar.Height);
             }
         };
