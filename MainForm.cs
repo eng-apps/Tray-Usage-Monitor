@@ -230,10 +230,10 @@ public sealed class MainForm : Form
         _widget.Controls.Clear();
 
         var d = _lastData;
-        var height = 180;
-        if (d.HasWeekly) height += 90;
-        if (d.ExtraEnabled) height += 70;
-        _widget.ClientSize = new Size(400, height - 40);
+        var height = 160;
+        if (d.HasWeekly) height += 75;
+        if (d.ExtraEnabled) height += 60;
+        _widget.ClientSize = new Size(400, height - 20);
 
         int y = 15;
         // Session bar: colored session-pace marker + cyan weekly-reference marker (when available)
@@ -306,7 +306,7 @@ public sealed class MainForm : Form
             Text = sub, Location = new Point(20, y), Size = new Size(370, 18),
             ForeColor = Color.FromArgb(140, 140, 150), Font = new Font("Segoe UI", 8.5f),
         });
-        y += 30;
+        y += 18;
     }
 
     // ═══════════════════════════════════════
