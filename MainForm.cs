@@ -17,6 +17,9 @@ public sealed class MainForm : Form
     private int _errors;
     private bool _tokenWarningShown;
 
+    private Form? _widget;
+    private System.Windows.Forms.Timer? _widgetTimer;
+
     private static readonly Color COk = Color.FromArgb(34, 197, 94);
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
     private static readonly Color CCrit = Color.FromArgb(239, 68, 68);
@@ -44,11 +47,18 @@ public sealed class MainForm : Form
         _pollTimer = new System.Windows.Forms.Timer { Interval = 120_000 }; // 2 min
         _pollTimer.Tick += async (_, _) => await PollAsync();
 
-        Load += async (_, _) =>
+        // Load event won't fire because SetVisibleCore(false) prevents visibility.
+        // Use a one-shot timer to kick off initial work once the message loop is running.
+        var startup = new System.Windows.Forms.Timer { Interval = 200 };
+        startup.Tick += async (_, _) =>
         {
+            startup.Stop();
+            startup.Dispose();
             await PollAsync();
             _pollTimer.Start();
+            ShowDetails();
         };
+        startup.Start();
     }
 
     // ═══════════════════════════════════════
@@ -91,6 +101,7 @@ public sealed class MainForm : Form
             var pct = data.SessionPercent;
             var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
             SetIcon($"{pct:0}%", color, data.TooltipText);
+            RefreshWidget();
         }
         catch (UnauthorizedAccessException)
         {
@@ -150,45 +161,88 @@ public sealed class MainForm : Form
     }
 
     // ═══════════════════════════════════════
-    // DETAILS DIALOG
+    // WIDGET
     // ═══════════════════════════════════════
 
     private void ShowDetails()
     {
-        if (_lastData == null)
+        if (_widget != null && !_widget.IsDisposed)
         {
-            MessageBox.Show("No data yet.", "Claude Usage", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _widget.Activate();
+            _ = PollAsync();
             return;
         }
+
+        _widget = new Form
+        {
+            Text = "Claude Usage",
+            FormBorderStyle = FormBorderStyle.FixedToolWindow,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = Color.FromArgb(24, 24, 27), ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10f), TopMost = true,
+            ShowInTaskbar = false,
+            ClientSize = new Size(400, 60),
+        };
+
+        // Position near system tray (bottom-right)
+        var screen = Screen.PrimaryScreen!.WorkingArea;
+        _widget.StartPosition = FormStartPosition.Manual;
+        _widget.Location = new Point(screen.Right - 430, screen.Bottom - 120);
+
+        _widget.FormClosed += (_, _) =>
+        {
+            _widgetTimer?.Stop();
+            _widgetTimer?.Dispose();
+            _widgetTimer = null;
+            _widget = null;
+        };
+
+        if (_lastData != null)
+            RefreshWidget();
+        else
+            _widget.Controls.Add(new Label
+            {
+                Text = "Loading...",
+                Location = new Point(20, 15), Size = new Size(370, 22),
+                ForeColor = CGray, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+            });
+
+        _widgetTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
+        _widgetTimer.Tick += async (_, _) => await PollAsync();
+        _widgetTimer.Start();
+
+        _widget.Show();
+
+        if (_lastData == null)
+            _ = PollAsync();
+    }
+
+    private void RefreshWidget()
+    {
+        if (_widget == null || _widget.IsDisposed || _lastData == null) return;
+
+        _widget.SuspendLayout();
+        _widget.Controls.Clear();
 
         var d = _lastData;
         var height = 180;
         if (d.HasWeekly) height += 90;
         if (d.ExtraEnabled) height += 70;
-
-        using var dlg = new Form
-        {
-            Text = "Claude Usage", Size = new Size(420, height),
-            StartPosition = FormStartPosition.CenterScreen,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false, MinimizeBox = false,
-            BackColor = Color.FromArgb(24, 24, 27), ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10f), TopMost = true,
-        };
+        _widget.ClientSize = new Size(400, height - 40);
 
         int y = 15;
-        AddBar(dlg, ref y, "Session (5h)", d.SessionPercent, $"Reset: {d.SessionResetText} | {d.SessionPaceText}", d.SessionExpectedPercent);
-        if (d.HasWeekly) AddBar(dlg, ref y, "Weekly (7d)", d.WeeklyPercent, $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceText}", d.WeeklyExpectedPercent);
-        if (d.ExtraEnabled) AddBar(dlg, ref y, "Extra Usage", d.ExtraPercent, $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}");
+        AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, $"Reset: {d.SessionResetText} | {d.SessionPaceText}", d.SessionExpectedPercent);
+        if (d.HasWeekly) AddBar(_widget, ref y, "Weekly (7d)", d.WeeklyPercent, $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceText}", d.WeeklyExpectedPercent);
+        if (d.ExtraEnabled) AddBar(_widget, ref y, "Extra Usage", d.ExtraPercent, $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}");
 
-        dlg.Controls.Add(new Label
+        _widget.Controls.Add(new Label
         {
             Text = $"Updated: {d.FetchedAt:HH:mm:ss}",
             Location = new Point(20, y), Size = new Size(370, 18),
             ForeColor = Color.FromArgb(100, 100, 110), Font = new Font("Segoe UI", 8f),
         });
 
-        dlg.ShowDialog();
+        _widget.ResumeLayout();
     }
 
     private static void AddBar(Form f, ref int y, string label, double pct, string sub, double expectedPct = -1)
@@ -282,7 +336,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); }
+        if (disposing) { _widgetTimer?.Dispose(); _widget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); }
         base.Dispose(disposing);
     }
 }
