@@ -247,12 +247,12 @@ public sealed class MainForm : Form
                 $"Reset: {d.SessionResetText} | {d.SessionPaceText}",
                 (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)));
 
-        // Weekly bar: colored marker + pace-diff % in label
+        // Weekly bar: colored marker + pace-diff % in subtitle
         if (d.HasWeekly)
         {
-            var weeklyLabel = $"Weekly (7d)  {d.WeeklyPaceDiff:+0.0;-0.0;0.0}%";
-            AddBar(_widget, ref y, weeklyLabel, d.WeeklyPercent,
-                $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceText}",
+            var weeklySub = $"{d.WeeklyPaceDiff:+0.0;-0.0;0.0}% | Reset: {d.WeeklyResetText}";
+            AddBar(_widget, ref y, "Weekly (7d)", d.WeeklyPercent,
+                weeklySub,
                 (d.WeeklyExpectedPercent, PaceColor(d.WeeklyPaceDiff)));
         }
 
