@@ -234,7 +234,10 @@ public sealed class MainForm : Form
 
         int y = 15;
         // Session bar: colored session-pace marker + cyan weekly-reference marker (when available)
-        var sessionSub = $"Reset: {d.SessionResetText} | {d.SessionPaceText}";
+        // Subtitle names both markers so the two lines are not ambiguous
+        var sessionSub = d.HasWeekly
+            ? $"Reset: {d.SessionResetText} | {d.SessionPaceText} | W: {d.WeeklyPaceText}"
+            : $"Reset: {d.SessionResetText} | {d.SessionPaceText}";
         if (d.HasWeekly)
             AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, sessionSub,
                 (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)),
